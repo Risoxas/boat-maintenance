@@ -105,6 +105,10 @@ class ServiceOrder(models.Model):
     def __str__(self) -> str:
         return f"Order #{self.pk} · {self.boat.name} ({self.service_date})"
 
+    @property
+    def total_amount(self) -> Decimal:
+        return sum((item.line_total for item in self.items.all()), Decimal("0.00"))
+
 
 class ServiceProofPhoto(models.Model):
     class Stage(models.TextChoices):
@@ -155,3 +159,7 @@ class OrderDetail(models.Model):
 
     def __str__(self) -> str:
         return f"{self.product.name} x {self.quantity} (Order #{self.order_id})"
+
+    @property
+    def line_total(self) -> Decimal:
+        return (self.quantity * self.unit_price).quantize(Decimal("0.01"))

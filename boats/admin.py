@@ -82,11 +82,24 @@ class ProductAdmin(admin.ModelAdmin):
 
 @admin.register(ServiceOrder)
 class ServiceOrderAdmin(admin.ModelAdmin):
-    list_display = ("id", "boat", "customer", "employee", "service_date", "status", "proof_count")
+    list_display = (
+        "id",
+        "boat",
+        "customer",
+        "employee",
+        "service_date",
+        "status",
+        "proof_count",
+        "total_display",
+    )
     list_filter = ("status", "service_date")
     search_fields = ("boat__name", "boat__mooring_no", "customer__contact_last_name")
-    readonly_fields = ("proof_gallery",)
+    readonly_fields = ("total_display", "proof_gallery")
     inlines = [ServiceProofPhotoInline, OrderDetailInline]
+
+    @admin.display(description="Total")
+    def total_display(self, obj: ServiceOrder) -> str:
+        return f"${obj.total_amount:,.2f}"
 
     @admin.display(description="Proofs")
     def proof_count(self, obj: ServiceOrder) -> int:
