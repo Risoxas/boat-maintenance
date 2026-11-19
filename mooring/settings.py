@@ -9,8 +9,11 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "False").lower() in {"1", "true", "yes"}
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 if not SECRET_KEY:
-    if DEBUG or os.environ.get("PYTEST_CURRENT_TEST") or any(
-        cmd in os.sys.argv for cmd in ("test", "makemigrations", "check")
+    if (
+        DEBUG
+        or "pytest" in os.sys.modules
+        or os.environ.get("PYTEST_CURRENT_TEST")
+        or any(cmd in os.sys.argv for cmd in ("test", "makemigrations", "check"))
     ):
         SECRET_KEY = "dev-insecure-local-only-key"
     else:
