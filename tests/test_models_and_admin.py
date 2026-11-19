@@ -3,7 +3,9 @@ from decimal import Decimal
 
 import pytest
 from django.contrib import admin
+from django.test import RequestFactory
 
+from boats.admin import ServiceOrderAdmin
 from boats.models import (
     Boat,
     Customer,
@@ -100,3 +102,54 @@ def test_service_order_total_amount() -> None:
     assert d1.line_total == Decimal("91.00")
     assert d2.line_total == Decimal("120.00")
     assert order.total_amount == Decimal("211.00")
+
+
+@pytest.mark.django_db
+def test_service_order_admin_csv_export() -> None:
+    customer = Customer.objects.create(
+        contact_first_name="Sofia",
+        contact_last_name="Vega",
+        phone_number="3310005555",
+        email="sofia@example.com",
+    )
+    employee = Employee.objects.create(
+        first_name="Luis",
+        last_name="Gomez",
+        work_phone="3310006666",
+    )
+    boat = Boat.objects.create(
+        name="Coral Queen",
+        mooring_no="M-07",
+        mooring_location="Marina Vallarta",
+        customer=customer,
+    )
+    order = ServiceOrder.objects.create(
+        customer=customer,
+        employee=employee,
+        boat=boat,
+        order_date=date(2026, 11, 19),
+        service_date=date(2026, 11, 21),
+        status=ServiceOrder.Status.COMPLETED,
+    )
+    service = Product.objects.create(name="Propeller Inspection", unit_price=Decimal("85.00"))
+    OrderDetail.objects.create(
+        order=order,
+        product=service,
+        quantity=Decimal("1.00"),
+        unit_price=service.unit_price,
+    )
+
+    model_admin = ServiceOrderAdmin(ServiceOrder, admin.site)
+    request = RequestFactory().get("/admin/boats/serviceorder/")
+    response = model_admin.export_as_csv(request, ServiceOrder.objects.filter(pk=order.pk))
+
+    assert response.status_code == 200
+    assert response["Content-Type"] == "text/csv"
+    assert 'filename="service_orders.csv"' in response["Content-Disposition"]
+
+    csv_text = response.content.decode("utf-8")
+    expected_header = (
+        "Order ID,Boat,Mooring No,Customer,Employee,Service Date,Status,Proof Count,Total"
+    )
+    assert expected_header in csv_text
+    assert "Coral Queen,M-07,Sofia Vega,Luis Gomez,2026-11-21,Completed,0,85.00" in csv_text
