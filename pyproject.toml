@@ -1,0 +1,30 @@
+[project]
+name = "boat-maintenance"
+version = "0.1.0"
+description = "Django Admin platform for boat mooring and maintenance service orders with photo proofs"
+requires-python = ">=3.12"
+dependencies = [
+  "django>=5.1,<5.3",
+  "pillow>=11.0,<12.0",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3,<9.0",
+  "pytest-django>=4.9,<5.0",
+  "ruff>=0.9,<1.0",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "mooring.settings"
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+exclude = ["*/migrations/*"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "S"]
+ignore = ["S105", "S106"]
