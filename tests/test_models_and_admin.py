@@ -3,11 +3,15 @@ from decimal import Decimal
 
 import pytest
 from django.contrib import admin
+from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory
 
 from boats.admin import ServiceOrderAdmin
 from boats.models import (
+    MAX_PHOTO_SIZE_BYTES,
     Boat,
+    BoatPhoto,
     Customer,
     Employee,
     OrderDetail,
@@ -15,6 +19,7 @@ from boats.models import (
     ServiceOrder,
     ServiceProofPhoto,
     service_proof_upload_path,
+    validate_photo_size,
 )
 
 
@@ -153,3 +158,19 @@ def test_service_order_admin_csv_export() -> None:
     )
     assert expected_header in csv_text
     assert "Coral Queen,M-07,Sofia Vega,Luis Gomez,2026-11-21,Completed,0,85.00" in csv_text
+
+
+def test_photo_validation_rejects_oversized_and_bad_extensions() -> None:
+    small_file = SimpleUploadedFile("hull.jpg", b"abc", content_type="image/jpeg")
+    validate_photo_size(small_file)
+
+    class OversizedStub:
+        size = MAX_PHOTO_SIZE_BYTES + 1
+
+    with pytest.raises(ValidationError, match="5 MB"):
+        validate_photo_size(OversizedStub())
+
+    bad_ext = SimpleUploadedFile("script.svg", b"<svg/>", content_type="image/svg+xml")
+    photo = BoatPhoto(image=bad_ext)
+    with pytest.raises(ValidationError):
+        photo.image.field.run_validators(photo.image)

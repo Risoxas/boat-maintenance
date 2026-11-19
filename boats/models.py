@@ -1,7 +1,18 @@
 from decimal import Decimal
 
-from django.core.validators import MinValueValidator, RegexValidator
+from django.core.exceptions import ValidationError
+from django.core.validators import FileExtensionValidator, MinValueValidator, RegexValidator
 from django.db import models
+
+MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
+ALLOWED_PHOTO_EXTENSIONS = ["jpg", "jpeg", "png", "webp"]
+
+
+def validate_photo_size(file_obj: object) -> None:
+    size = getattr(file_obj, "size", None)
+    if size is not None and size > MAX_PHOTO_SIZE_BYTES:
+        raise ValidationError("Photo file size must be 5 MB or smaller.")
+
 
 postal_validator = RegexValidator(
     regex=r"^\d{4,5}$",
@@ -65,7 +76,13 @@ class Boat(models.Model):
 
 class BoatPhoto(models.Model):
     boat = models.ForeignKey(Boat, on_delete=models.CASCADE, related_name="photos")
-    image = models.ImageField(upload_to=boat_photo_upload_path)
+    image = models.ImageField(
+        upload_to=boat_photo_upload_path,
+        validators=[
+            FileExtensionValidator(allowed_extensions=ALLOWED_PHOTO_EXTENSIONS),
+            validate_photo_size,
+        ],
+    )
     caption = models.CharField(max_length=200, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
@@ -117,7 +134,13 @@ class ServiceProofPhoto(models.Model):
 
     order = models.ForeignKey(ServiceOrder, on_delete=models.CASCADE, related_name="proof_photos")
     stage = models.CharField(max_length=10, choices=Stage.choices, default=Stage.BEFORE)
-    image = models.ImageField(upload_to=service_proof_upload_path)
+    image = models.ImageField(
+        upload_to=service_proof_upload_path,
+        validators=[
+            FileExtensionValidator(allowed_extensions=ALLOWED_PHOTO_EXTENSIONS),
+            validate_photo_size,
+        ],
+    )
     caption = models.CharField(max_length=200, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
