@@ -100,7 +100,21 @@ class ServiceOrderAdmin(admin.ModelAdmin):
     search_fields = ("boat__name", "boat__mooring_no", "customer__contact_last_name")
     readonly_fields = ("total_display", "proof_gallery")
     inlines = [ServiceProofPhotoInline, OrderDetailInline]
-    actions = ("export_as_csv",)
+    actions = ("export_as_csv", "mark_in_progress", "mark_completed")
+
+    @admin.action(description="Mark selected orders as In Progress")
+    def mark_in_progress(
+        self, request: HttpRequest, queryset: QuerySet[ServiceOrder]
+    ) -> None:
+        updated = queryset.update(status=ServiceOrder.Status.IN_PROGRESS)
+        self.message_user(request, f"{updated} service order(s) marked In Progress.")
+
+    @admin.action(description="Mark selected orders as Completed")
+    def mark_completed(
+        self, request: HttpRequest, queryset: QuerySet[ServiceOrder]
+    ) -> None:
+        updated = queryset.update(status=ServiceOrder.Status.COMPLETED)
+        self.message_user(request, f"{updated} service order(s) marked Completed.")
 
     @admin.action(description="Export selected service orders to CSV")
     def export_as_csv(

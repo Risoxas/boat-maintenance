@@ -174,3 +174,45 @@ def test_photo_validation_rejects_oversized_and_bad_extensions() -> None:
     photo = BoatPhoto(image=bad_ext)
     with pytest.raises(ValidationError):
         photo.image.field.run_validators(photo.image)
+
+
+@pytest.mark.django_db
+def test_service_order_admin_bulk_status_actions() -> None:
+    customer = Customer.objects.create(
+        contact_first_name="Mateo",
+        contact_last_name="Cruz",
+        phone_number="3310007777",
+        email="mateo@example.com",
+    )
+    employee = Employee.objects.create(
+        first_name="Lucia",
+        last_name="Perez",
+        work_phone="3310008888",
+    )
+    boat = Boat.objects.create(
+        name="Wave Runner",
+        mooring_no="M-88",
+        mooring_location="Marina Vallarta",
+        customer=customer,
+    )
+    order = ServiceOrder.objects.create(
+        customer=customer,
+        employee=employee,
+        boat=boat,
+        order_date=date(2026, 11, 20),
+        service_date=date(2026, 11, 21),
+    )
+    assert order.status == ServiceOrder.Status.SCHEDULED
+
+    model_admin = ServiceOrderAdmin(ServiceOrder, admin.site)
+    model_admin.message_user = lambda *args, **kwargs: None  # type: ignore[method-assign]
+    request = RequestFactory().post("/admin/boats/serviceorder/")
+
+    qs = ServiceOrder.objects.filter(pk=order.pk)
+    model_admin.mark_in_progress(request, qs)
+    order.refresh_from_db()
+    assert order.status == ServiceOrder.Status.IN_PROGRESS
+
+    model_admin.mark_completed(request, qs)
+    order.refresh_from_db()
+    assert order.status == ServiceOrder.Status.COMPLETED
