@@ -1,4 +1,8 @@
+import csv
+
 from django.contrib import admin
+from django.db.models import QuerySet
+from django.http import HttpRequest, HttpResponse
 from django.utils.html import format_html, format_html_join
 
 from boats.models import (
@@ -82,11 +86,76 @@ class ProductAdmin(admin.ModelAdmin):
 
 @admin.register(ServiceOrder)
 class ServiceOrderAdmin(admin.ModelAdmin):
-    list_display = ("id", "boat", "customer", "employee", "service_date", "status", "proof_count")
+    list_display = (
+        "id",
+        "boat",
+        "customer",
+        "employee",
+        "service_date",
+        "status",
+        "proof_count",
+        "total_display",
+    )
     list_filter = ("status", "service_date")
     search_fields = ("boat__name", "boat__mooring_no", "customer__contact_last_name")
-    readonly_fields = ("proof_gallery",)
+    readonly_fields = ("total_display", "proof_gallery")
     inlines = [ServiceProofPhotoInline, OrderDetailInline]
+    actions = ("export_as_csv", "mark_in_progress", "mark_completed")
+
+    @admin.action(description="Mark selected orders as In Progress")
+    def mark_in_progress(
+        self, request: HttpRequest, queryset: QuerySet[ServiceOrder]
+    ) -> None:
+        updated = queryset.update(status=ServiceOrder.Status.IN_PROGRESS)
+        self.message_user(request, f"{updated} service order(s) marked In Progress.")
+
+    @admin.action(description="Mark selected orders as Completed")
+    def mark_completed(
+        self, request: HttpRequest, queryset: QuerySet[ServiceOrder]
+    ) -> None:
+        updated = queryset.update(status=ServiceOrder.Status.COMPLETED)
+        self.message_user(request, f"{updated} service order(s) marked Completed.")
+
+    @admin.action(description="Export selected service orders to CSV")
+    def export_as_csv(
+        self, request: HttpRequest, queryset: QuerySet[ServiceOrder]
+    ) -> HttpResponse:
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="service_orders.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow(
+            [
+                "Order ID",
+                "Boat",
+                "Mooring No",
+                "Customer",
+                "Employee",
+                "Service Date",
+                "Status",
+                "Proof Count",
+                "Total",
+            ]
+        )
+        for order in queryset.select_related("boat", "customer", "employee"):
+            writer.writerow(
+                [
+                    order.pk,
+                    order.boat.name,
+                    order.boat.mooring_no,
+                    str(order.customer),
+                    str(order.employee),
+                    order.service_date.isoformat(),
+                    order.get_status_display(),
+                    order.proof_photos.count(),
+                    f"{order.total_amount:.2f}",
+                ]
+            )
+        return response
+
+    @admin.display(description="Total")
+    def total_display(self, obj: ServiceOrder) -> str:
+        return f"${obj.total_amount:,.2f}"
 
     @admin.display(description="Proofs")
     def proof_count(self, obj: ServiceOrder) -> int:
