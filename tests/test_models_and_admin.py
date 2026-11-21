@@ -216,3 +216,42 @@ def test_service_order_admin_bulk_status_actions() -> None:
     model_admin.mark_completed(request, qs)
     order.refresh_from_db()
     assert order.status == ServiceOrder.Status.COMPLETED
+
+
+@pytest.mark.django_db
+def test_service_order_rejects_service_date_before_order_date() -> None:
+    customer = Customer.objects.create(
+        contact_first_name="Diego",
+        contact_last_name="Silva",
+        phone_number="3310009999",
+        email="diego@example.com",
+    )
+    employee = Employee.objects.create(
+        first_name="Carla",
+        last_name="Ruiz",
+        work_phone="3310000001",
+    )
+    boat = Boat.objects.create(
+        name="Blue Marlin",
+        mooring_no="M-03",
+        mooring_location="Marina Vallarta",
+        customer=customer,
+    )
+    invalid_order = ServiceOrder(
+        customer=customer,
+        employee=employee,
+        boat=boat,
+        order_date=date(2026, 11, 20),
+        service_date=date(2026, 11, 19),
+    )
+    with pytest.raises(ValidationError, match="Service date cannot be earlier"):
+        invalid_order.full_clean()
+
+    valid_order = ServiceOrder(
+        customer=customer,
+        employee=employee,
+        boat=boat,
+        order_date=date(2026, 11, 20),
+        service_date=date(2026, 11, 20),
+    )
+    valid_order.full_clean()

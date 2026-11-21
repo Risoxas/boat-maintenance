@@ -122,6 +122,13 @@ class ServiceOrder(models.Model):
     def __str__(self) -> str:
         return f"Order #{self.pk} · {self.boat.name} ({self.service_date})"
 
+    def clean(self) -> None:
+        super().clean()
+        if self.order_date and self.service_date and self.service_date < self.order_date:
+            raise ValidationError(
+                {"service_date": "Service date cannot be earlier than order date."}
+            )
+
     @property
     def total_amount(self) -> Decimal:
         return sum((item.line_total for item in self.items.all()), Decimal("0.00"))
