@@ -8,7 +8,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory
 from django.utils import timezone
 
-from boats.admin import BoatAdmin, ServiceOrderAdmin
+from boats.admin import BoatAdmin, MooringCheckOverdueFilter, ServiceOrderAdmin
 from boats.models import (
     MAX_PHOTO_SIZE_BYTES,
     Boat,
@@ -280,3 +280,52 @@ def test_boat_days_since_last_check() -> None:
     )
     assert checked_ago.days_since_last_check == 12
     assert boat_admin.last_check_status(checked_ago) == "12d ago"
+
+
+@pytest.mark.django_db
+def test_boat_admin_overdue_filter() -> None:
+    today = timezone.localdate()
+    overdue = Boat.objects.create(
+        name="Old Salt",
+        mooring_no="M-21",
+        mooring_location="Bay",
+        last_check=today - timedelta(days=45),
+    )
+    current = Boat.objects.create(
+        name="Fresh Wind",
+        mooring_no="M-22",
+        mooring_location="Bay",
+        last_check=today - timedelta(days=5),
+    )
+    never = Boat.objects.create(
+        name="Uninspected",
+        mooring_no="M-23",
+        mooring_location="Bay",
+    )
+
+    boat_admin = BoatAdmin(Boat, admin.site)
+    qs = Boat.objects.all()
+
+    f_overdue = MooringCheckOverdueFilter(
+        RequestFactory().get("/admin/boats/boat/"),
+        {"inspection_status": ["overdue"]},
+        Boat,
+        boat_admin,
+    )
+    assert list(f_overdue.queryset(RequestFactory().get("/"), qs)) == [overdue]
+
+    f_current = MooringCheckOverdueFilter(
+        RequestFactory().get("/admin/boats/boat/"),
+        {"inspection_status": ["current"]},
+        Boat,
+        boat_admin,
+    )
+    assert list(f_current.queryset(RequestFactory().get("/"), qs)) == [current]
+
+    f_never = MooringCheckOverdueFilter(
+        RequestFactory().get("/admin/boats/boat/"),
+        {"inspection_status": ["never"]},
+        Boat,
+        boat_admin,
+    )
+    assert list(f_never.queryset(RequestFactory().get("/"), qs)) == [never]

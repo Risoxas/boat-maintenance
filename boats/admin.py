@@ -1,8 +1,10 @@
 import csv
+from datetime import timedelta
 
 from django.contrib import admin
 from django.db.models import QuerySet
 from django.http import HttpRequest, HttpResponse
+from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
 from boats.models import (
@@ -64,6 +66,30 @@ class CustomerAdmin(admin.ModelAdmin):
     search_fields = ("contact_first_name", "contact_last_name", "company_name", "email")
 
 
+class MooringCheckOverdueFilter(admin.SimpleListFilter):
+    title = "inspection status"
+    parameter_name = "inspection_status"
+
+    def lookups(
+        self, request: HttpRequest, model_admin: admin.ModelAdmin
+    ) -> list[tuple[str, str]]:
+        return [
+            ("overdue", "Overdue (>30 days)"),
+            ("current", "Up to date (≤30 days)"),
+            ("never", "Never checked"),
+        ]
+
+    def queryset(self, request: HttpRequest, queryset: QuerySet[Boat]) -> QuerySet[Boat]:
+        cutoff = timezone.localdate() - timedelta(days=30)
+        if self.value() == "overdue":
+            return queryset.filter(last_check__lt=cutoff)
+        if self.value() == "current":
+            return queryset.filter(last_check__gte=cutoff)
+        if self.value() == "never":
+            return queryset.filter(last_check__isnull=True)
+        return queryset
+
+
 @admin.register(Boat)
 class BoatAdmin(admin.ModelAdmin):
     list_display = (
@@ -74,7 +100,7 @@ class BoatAdmin(admin.ModelAdmin):
         "last_check",
         "last_check_status",
     )
-    list_filter = ("mooring_location", "last_check")
+    list_filter = ("mooring_location", MooringCheckOverdueFilter, "last_check")
     search_fields = ("name", "mooring_no", "customer__contact_last_name")
     inlines = [BoatPhotoInline]
 
