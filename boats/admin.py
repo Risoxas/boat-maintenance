@@ -66,10 +66,26 @@ class CustomerAdmin(admin.ModelAdmin):
 
 @admin.register(Boat)
 class BoatAdmin(admin.ModelAdmin):
-    list_display = ("name", "mooring_no", "mooring_location", "customer", "last_check")
+    list_display = (
+        "name",
+        "mooring_no",
+        "mooring_location",
+        "customer",
+        "last_check",
+        "last_check_status",
+    )
     list_filter = ("mooring_location", "last_check")
     search_fields = ("name", "mooring_no", "customer__contact_last_name")
     inlines = [BoatPhotoInline]
+
+    @admin.display(description="Check Age")
+    def last_check_status(self, obj: Boat) -> str:
+        days = obj.days_since_last_check
+        if days is None:
+            return "Never checked"
+        if days == 0:
+            return "Today"
+        return f"{days}d ago"
 
 
 @admin.register(Employee)

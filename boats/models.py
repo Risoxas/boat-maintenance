@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator, MinValueValidator, RegexValidator
 from django.db import models
+from django.utils import timezone
 
 MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 ALLOWED_PHOTO_EXTENSIONS = ["jpg", "jpeg", "png", "webp"]
@@ -72,6 +73,12 @@ class Boat(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} (Mooring {self.mooring_no})"
+
+    @property
+    def days_since_last_check(self) -> int | None:
+        if not self.last_check:
+            return None
+        return (timezone.localdate() - self.last_check).days
 
 
 class BoatPhoto(models.Model):
