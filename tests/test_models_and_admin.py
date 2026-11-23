@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -6,8 +6,9 @@ from django.contrib import admin
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory
+from django.utils import timezone
 
-from boats.admin import ServiceOrderAdmin
+from boats.admin import BoatAdmin, ServiceOrderAdmin
 from boats.models import (
     MAX_PHOTO_SIZE_BYTES,
     Boat,
@@ -255,3 +256,27 @@ def test_service_order_rejects_service_date_before_order_date() -> None:
         service_date=date(2026, 11, 20),
     )
     valid_order.full_clean()
+
+
+def test_boat_days_since_last_check() -> None:
+    boat_admin = BoatAdmin(Boat, admin.site)
+
+    unchecked = Boat(name="Drifter", mooring_no="M-10", mooring_location="Bay")
+    assert unchecked.days_since_last_check is None
+    assert boat_admin.last_check_status(unchecked) == "Never checked"
+
+    today = timezone.localdate()
+    checked_today = Boat(
+        name="Horizon", mooring_no="M-11", mooring_location="Bay", last_check=today
+    )
+    assert checked_today.days_since_last_check == 0
+    assert boat_admin.last_check_status(checked_today) == "Today"
+
+    checked_ago = Boat(
+        name="Nautilus",
+        mooring_no="M-12",
+        mooring_location="Bay",
+        last_check=today - timedelta(days=12),
+    )
+    assert checked_ago.days_since_last_check == 12
+    assert boat_admin.last_check_status(checked_ago) == "12d ago"
