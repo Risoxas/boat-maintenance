@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -6,8 +6,9 @@ from django.contrib import admin
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory
+from django.utils import timezone
 
-from boats.admin import ServiceOrderAdmin
+from boats.admin import BoatAdmin, MooringCheckOverdueFilter, ServiceOrderAdmin
 from boats.models import (
     MAX_PHOTO_SIZE_BYTES,
     Boat,
@@ -255,3 +256,123 @@ def test_service_order_rejects_service_date_before_order_date() -> None:
         service_date=date(2026, 11, 20),
     )
     valid_order.full_clean()
+
+
+def test_boat_days_since_last_check() -> None:
+    boat_admin = BoatAdmin(Boat, admin.site)
+
+    unchecked = Boat(name="Drifter", mooring_no="M-10", mooring_location="Bay")
+    assert unchecked.days_since_last_check is None
+    assert boat_admin.last_check_status(unchecked) == "Never checked"
+
+    today = timezone.localdate()
+    checked_today = Boat(
+        name="Horizon", mooring_no="M-11", mooring_location="Bay", last_check=today
+    )
+    assert checked_today.days_since_last_check == 0
+    assert boat_admin.last_check_status(checked_today) == "Today"
+
+    checked_ago = Boat(
+        name="Nautilus",
+        mooring_no="M-12",
+        mooring_location="Bay",
+        last_check=today - timedelta(days=12),
+    )
+    assert checked_ago.days_since_last_check == 12
+    assert boat_admin.last_check_status(checked_ago) == "12d ago"
+
+
+@pytest.mark.django_db
+def test_boat_admin_overdue_filter() -> None:
+    today = timezone.localdate()
+    overdue = Boat.objects.create(
+        name="Old Salt",
+        mooring_no="M-21",
+        mooring_location="Bay",
+        last_check=today - timedelta(days=45),
+    )
+    current = Boat.objects.create(
+        name="Fresh Wind",
+        mooring_no="M-22",
+        mooring_location="Bay",
+        last_check=today - timedelta(days=5),
+    )
+    never = Boat.objects.create(
+        name="Uninspected",
+        mooring_no="M-23",
+        mooring_location="Bay",
+    )
+
+    boat_admin = BoatAdmin(Boat, admin.site)
+    qs = Boat.objects.all()
+
+    f_overdue = MooringCheckOverdueFilter(
+        RequestFactory().get("/admin/boats/boat/"),
+        {"inspection_status": ["overdue"]},
+        Boat,
+        boat_admin,
+    )
+    assert list(f_overdue.queryset(RequestFactory().get("/"), qs)) == [overdue]
+
+    f_current = MooringCheckOverdueFilter(
+        RequestFactory().get("/admin/boats/boat/"),
+        {"inspection_status": ["current"]},
+        Boat,
+        boat_admin,
+    )
+    assert list(f_current.queryset(RequestFactory().get("/"), qs)) == [current]
+
+    f_never = MooringCheckOverdueFilter(
+        RequestFactory().get("/admin/boats/boat/"),
+        {"inspection_status": ["never"]},
+        Boat,
+        boat_admin,
+    )
+    assert list(f_never.queryset(RequestFactory().get("/"), qs)) == [never]
+
+
+@pytest.mark.django_db
+def test_service_order_has_before_and_after_proofs() -> None:
+    customer = Customer.objects.create(
+        contact_first_name="Valeria",
+        contact_last_name="Navarro",
+        phone_number="3310001212",
+        email="valeria@example.com",
+    )
+    employee = Employee.objects.create(
+        first_name="Hugo",
+        last_name="Castro",
+        work_phone="3310003434",
+    )
+    boat = Boat.objects.create(
+        name="Aqua Spirit",
+        mooring_no="M-55",
+        mooring_location="Marina Vallarta",
+        customer=customer,
+    )
+    order = ServiceOrder.objects.create(
+        customer=customer,
+        employee=employee,
+        boat=boat,
+        order_date=date(2026, 11, 23),
+        service_date=date(2026, 11, 24),
+    )
+
+    order_admin = ServiceOrderAdmin(ServiceOrder, admin.site)
+    assert order.has_before_and_after_proofs is False
+    assert order_admin.has_complete_proofs(order) is False
+
+    ServiceProofPhoto.objects.create(
+        order=order,
+        stage=ServiceProofPhoto.Stage.BEFORE,
+        image="orders/1/before/hull.jpg",
+    )
+    assert order.has_before_and_after_proofs is False
+
+    ServiceProofPhoto.objects.create(
+        order=order,
+        stage=ServiceProofPhoto.Stage.AFTER,
+        image="orders/1/after/hull.jpg",
+    )
+    assert order.has_before_and_after_proofs is True
+    assert order_admin.has_complete_proofs(order) is True
