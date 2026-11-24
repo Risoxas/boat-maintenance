@@ -329,3 +329,50 @@ def test_boat_admin_overdue_filter() -> None:
         boat_admin,
     )
     assert list(f_never.queryset(RequestFactory().get("/"), qs)) == [never]
+
+
+@pytest.mark.django_db
+def test_service_order_has_before_and_after_proofs() -> None:
+    customer = Customer.objects.create(
+        contact_first_name="Valeria",
+        contact_last_name="Navarro",
+        phone_number="3310001212",
+        email="valeria@example.com",
+    )
+    employee = Employee.objects.create(
+        first_name="Hugo",
+        last_name="Castro",
+        work_phone="3310003434",
+    )
+    boat = Boat.objects.create(
+        name="Aqua Spirit",
+        mooring_no="M-55",
+        mooring_location="Marina Vallarta",
+        customer=customer,
+    )
+    order = ServiceOrder.objects.create(
+        customer=customer,
+        employee=employee,
+        boat=boat,
+        order_date=date(2026, 11, 23),
+        service_date=date(2026, 11, 24),
+    )
+
+    order_admin = ServiceOrderAdmin(ServiceOrder, admin.site)
+    assert order.has_before_and_after_proofs is False
+    assert order_admin.has_complete_proofs(order) is False
+
+    ServiceProofPhoto.objects.create(
+        order=order,
+        stage=ServiceProofPhoto.Stage.BEFORE,
+        image="orders/1/before/hull.jpg",
+    )
+    assert order.has_before_and_after_proofs is False
+
+    ServiceProofPhoto.objects.create(
+        order=order,
+        stage=ServiceProofPhoto.Stage.AFTER,
+        image="orders/1/after/hull.jpg",
+    )
+    assert order.has_before_and_after_proofs is True
+    assert order_admin.has_complete_proofs(order) is True

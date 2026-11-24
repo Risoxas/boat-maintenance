@@ -136,6 +136,7 @@ class ServiceOrderAdmin(admin.ModelAdmin):
         "service_date",
         "status",
         "proof_count",
+        "has_complete_proofs",
         "total_display",
     )
     list_filter = ("status", "service_date")
@@ -202,6 +203,10 @@ class ServiceOrderAdmin(admin.ModelAdmin):
     @admin.display(description="Proofs")
     def proof_count(self, obj: ServiceOrder) -> int:
         return obj.proof_photos.count()
+
+    @admin.display(boolean=True, description="Before & After")
+    def has_complete_proofs(self, obj: ServiceOrder) -> bool:
+        return obj.has_before_and_after_proofs
 
     @admin.display(description="Before / After Proof Gallery")
     def proof_gallery(self, obj: ServiceOrder) -> str:

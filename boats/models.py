@@ -140,6 +140,14 @@ class ServiceOrder(models.Model):
     def total_amount(self) -> Decimal:
         return sum((item.line_total for item in self.items.all()), Decimal("0.00"))
 
+    @property
+    def has_before_and_after_proofs(self) -> bool:
+        stages = set(self.proof_photos.values_list("stage", flat=True))
+        return (
+            ServiceProofPhoto.Stage.BEFORE in stages
+            and ServiceProofPhoto.Stage.AFTER in stages
+        )
+
 
 class ServiceProofPhoto(models.Model):
     class Stage(models.TextChoices):
